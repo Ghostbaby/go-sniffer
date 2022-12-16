@@ -8,6 +8,7 @@ import (
 	"github.com/google/gopacket"
 	"go-sniffer/pkg/model"
 	"go-sniffer/pkg/parse"
+	"go-sniffer/pkg/queue"
 	"io"
 	"log"
 	"os"
@@ -18,15 +19,22 @@ import (
 )
 
 const (
-	Port    = 3306
-	Version = "0.1"
-	CmdPort = "-p"
+	Port        = 3306
+	Version     = "0.1"
+	CmdPort     = "-p"
+	PushHost    = "-h"
+	SnifferType = "-t"
+
+	millSecondUnit = int64(time.Millisecond)
+
 )
 
 type Mysql struct {
-	port    int
-	version string
-	source  map[string]*stream
+	port        int
+	version     string
+	source      map[string]*stream
+	host        string
+	snifferType string
 }
 
 type stream struct {
@@ -74,7 +82,7 @@ func (m *Mysql) ResolveStream(net, transport gopacket.Flow, buf io.Reader) {
 		}
 
 		m.source[uuid] = &newStream
-		go newStream.resolve()
+		go newStream.resolve(m.host, m.snifferType)
 	}
 
 	//read bi-directional packet
@@ -129,6 +137,10 @@ func (m *Mysql) SetFlag(flg []string) {
 				panic("ERR : port(0-65535)")
 			}
 			break
+		case PushHost:
+			m.host = val
+		case SnifferType:
+			m.snifferType = val
 		default:
 			panic("ERR : mysql's params")
 		}
@@ -194,15 +206,15 @@ func (m *Mysql) resolvePacketTo(r io.Reader, w io.Writer) (uint8, error) {
 	return seq, nil
 }
 
-func (stm *stream) resolve() {
+func (stm *stream) resolve(host, snifferType string) {
 	for {
 		select {
 		case packet := <-stm.packets:
 			if packet.length != 0 {
 				if packet.isClientFlow {
-					stm.resolveClientPacket(packet.payload, packet.seq)
+					stm.resolveClientPacket(packet.payload, packet.seq, host, snifferType)
 				} else {
-					stm.resolveServerPacket(packet.payload, packet.seq)
+					stm.resolveServerPacket(packet.payload, packet.seq, host, snifferType)
 				}
 			}
 		}
@@ -225,7 +237,7 @@ func (stm *stream) findStmtPacket(srv chan *packet, seq int) *packet {
 	}
 }
 
-func (stm *stream) resolveServerPacket(payload []byte, seq int) {
+func (stm *stream) resolveServerPacket(payload []byte, seq int, host, snifferType string) {
 
 	var msg = ""
 	if len(payload) == 0 {
@@ -255,22 +267,31 @@ func (stm *stream) resolveServerPacket(payload []byte, seq int) {
 
 	fmt.Println(msg)
 	if stm.session != nil {
+		var clientPort int
+		if len(stm.session.ClientIP) > 0 {
+			clientPort, _ = strconv.Atoi(stm.session.ClientIP)
+		}
+
 		result := model.MysqlQueryPiece{
-			BaseQueryPiece: model.BaseQueryPiece{},
+			BaseQueryPiece: model.BaseQueryPiece{
+				EventTime: time.Now().UnixNano() / millSecondUnit,
+			},
 			ClientHost:     stm.session.ClientIP,
-			ClientPort:     stm.session.ClientPort,
+			ClientPort:     clientPort,
 			VisitUser:      stm.session.UserName,
 			VisitDB:        stm.session.DBName,
-			CostTimeInMS:   0,
 			Message:        msg,
+			SnifferType:    snifferType,
 		}
 
 		fmt.Println(result.ToString())
+		//queue.Metrics.Host = host
+		//queue.Metrics.Add(&result)
 	}
 
 }
 
-func (stm *stream) resolveClientPacket(payload []byte, seq int) {
+func (stm *stream) resolveClientPacket(payload []byte, seq int, host, snifferType string) {
 	if parse.IsAuth(payload[0]) {
 		userName, dbName, err := parse.AuthInfoParse(payload)
 		if err != nil {
@@ -394,19 +415,31 @@ func (stm *stream) resolveClientPacket(payload []byte, seq int) {
 	fmt.Println(GetNowStr(true) + msg)
 
 	if stm.session != nil {
+		var servicePort, clientPort int
+		if len(stm.session.ServerPort) > 0 {
+			servicePort, _ = strconv.Atoi(stm.session.ServerPort)
+		}
+
+		if len(stm.session.ClientIP) > 0 {
+			clientPort, _ = strconv.Atoi(stm.session.ClientIP)
+		}
+
 		result := model.MysqlQueryPiece{
 			BaseQueryPiece: model.BaseQueryPiece{
 				ServerIP:   stm.session.ServerIP,
-				ServerPort: stm.session.ServerPort,
+				ServerPort: servicePort,
+				EventTime: time.Now().UnixNano() / millSecondUnit,
 			},
 			ClientHost:   stm.session.ClientIP,
-			ClientPort:   stm.session.ClientPort,
+			ClientPort:   clientPort,
 			VisitUser:    stm.session.UserName,
 			VisitDB:      stm.session.DBName,
 			QuerySQL:     raw,
-			CostTimeInMS: 0,
+			SnifferType:  snifferType,
 		}
 
 		fmt.Println(result.ToString())
+		queue.Metrics.Host = host
+		queue.Metrics.Add(&result)
 	}
 }

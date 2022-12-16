@@ -7,19 +7,20 @@ type MysqlQueryPiece struct {
 	BaseQueryPiece
 
 	ClientHost string `json:"cip"`
-	ClientPort string `json:"cport"`
+	ClientPort int    `json:"cport"`
 
 	VisitUser    string `json:"user"`
 	VisitDB      string `json:"db"`
 	QuerySQL     string `json:"sql"`
 	CostTimeInMS int64  `json:"cms"`
 	Message      string `json:"message"`
+	SnifferType  string `json:"type"`
 }
 
 // BaseQueryPiece 查询信息
 type BaseQueryPiece struct {
 	ServerIP          string  `json:"sip"`
-	ServerPort        string  `json:"sport"`
+	ServerPort        int     `json:"sport"`
 	CapturePacketRate float64 `json:"cpr"`
 	EventTime         int64   `json:"bt"`
 }

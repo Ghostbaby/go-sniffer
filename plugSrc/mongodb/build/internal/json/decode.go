@@ -75,14 +75,13 @@ import (
 //
 // The JSON null value unmarshals into an interface, map, pointer, or slice
 // by setting that Go value to nil. Because null is often used in JSON to mean
-// ``not present,'' unmarshaling a JSON null into any other Go type has no effect
+// “not present,” unmarshaling a JSON null into any other Go type has no effect
 // on the value and produces no error.
 //
 // When unmarshaling quoted strings, invalid UTF-8 or
 // invalid UTF-16 surrogate pairs are not treated as an error.
 // Instead, they are replaced by the Unicode replacement
 // character U+FFFD.
-//
 func Unmarshal(data []byte, v interface{}) error {
 	// Check for well-formedness.
 	// Avoids filling out half a data structure
@@ -773,7 +772,7 @@ func (d *decodeState) isNull(off int) bool {
 // name consumes a const or function from d.data[d.off-1:], decoding into the value v.
 // the first byte of the function name has been read already.
 func (d *decodeState) name(v reflect.Value) {
-	if d.isNull(d.off-1) {
+	if d.isNull(d.off - 1) {
 		d.literal(v)
 		return
 	}
@@ -1076,9 +1075,9 @@ func (d *decodeState) storeKeyed(v reflect.Value) bool {
 }
 
 var (
-	trueBytes = []byte("true")
+	trueBytes  = []byte("true")
 	falseBytes = []byte("false")
-	nullBytes = []byte("null")
+	nullBytes  = []byte("null")
 )
 
 func (d *decodeState) storeValue(v reflect.Value, from interface{}) {
