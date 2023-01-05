@@ -44,7 +44,6 @@ pull_x86_image:
 	docker pull --platform=linux/amd64 golang:1.16.15-stretch
 
 tag_x86:
-	docker tag $(IMG) $(REMOTEIMGX86)
 	docker push $(REMOTEIMGX86)
 
 tag_arm:

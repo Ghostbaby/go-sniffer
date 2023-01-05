@@ -18,7 +18,7 @@ type Stmt struct {
 	Args []interface{}
 }
 
-func (stmt *Stmt) WriteToText() []byte {
+func (stmt *Stmt) WriteToText() (string, string) {
 
 	var buf bytes.Buffer
 
@@ -56,7 +56,7 @@ func (stmt *Stmt) WriteToText() []byte {
 	str = fmt.Sprintf("Drop stm id[%d];\n", stmt.ID)
 	buf.WriteString(str)
 
-	return buf.Bytes()
+	return string(buf.Bytes()), stmt.Query
 }
 
 func (stmt *Stmt) BindArgs(nullBitmap, paramTypes, paramValues []byte) error {

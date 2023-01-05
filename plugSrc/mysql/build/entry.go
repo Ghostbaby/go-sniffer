@@ -237,6 +237,11 @@ func (stm *stream) findStmtPacket(srv chan *packet, seq int) *packet {
 }
 
 func (stm *stream) resolveServerPacket(payload []byte, seq int, host, snifferType string) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Println(fmt.Sprintf("sniffer  panic: %v", r))
+		}
+	}()
 
 	var msg = ""
 	if len(payload) == 0 {
@@ -265,32 +270,38 @@ func (stm *stream) resolveServerPacket(payload []byte, seq int, host, snifferTyp
 	}
 
 	fmt.Println(msg)
-	if stm.session != nil {
-		var clientPort int
-		if len(stm.session.ClientIP) > 0 {
-			clientPort, _ = strconv.Atoi(stm.session.ClientIP)
-		}
-
-		result := model.MysqlQueryPiece{
-			BaseQueryPiece: model.BaseQueryPiece{
-				EventTime: time.Now().UnixNano() / millSecondUnit,
-			},
-			ClientHost:  stm.session.ClientIP,
-			ClientPort:  clientPort,
-			VisitUser:   stm.session.UserName,
-			VisitDB:     stm.session.DBName,
-			Message:     strings.Replace(msg, "\n", "", -1),
-			SnifferType: snifferType,
-		}
-
-		fmt.Println(result.ToString())
-		queue.Metrics.Host = host
-		queue.Metrics.Add(&result)
-	}
+	//if stm.session != nil {
+	//	var clientPort int
+	//	if len(stm.session.ClientIP) > 0 {
+	//		clientPort, _ = strconv.Atoi(stm.session.ClientIP)
+	//	}
+	//
+	//	result := model.MysqlQueryPiece{
+	//		BaseQueryPiece: model.BaseQueryPiece{
+	//			EventTime: time.Now().UnixNano() / millSecondUnit,
+	//		},
+	//		ClientHost:  stm.session.ClientIP,
+	//		ClientPort:  clientPort,
+	//		VisitUser:   stm.session.UserName,
+	//		VisitDB:     stm.session.DBName,
+	//		Message:     strings.Replace(msg, "\n", "", -1),
+	//		SnifferType: snifferType,
+	//	}
+	//
+	//	fmt.Println(result.ToString())
+	//	queue.Metrics.Host = host
+	//	queue.Metrics.Add(&result)
+	//}
 
 }
 
 func (stm *stream) resolveClientPacket(payload []byte, seq int, host, snifferType string) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Println(fmt.Sprintf("sniffer  panic: %v", r))
+		}
+	}()
+
 	if parse.IsAuth(payload[0]) {
 		userName, dbName, err := parse.AuthInfoParse(payload)
 		if err != nil {
@@ -416,8 +427,7 @@ func (stm *stream) resolveClientPacket(payload []byte, seq int, host, snifferTyp
 				log.Println("ERR : Could not bind params", err)
 			}
 		}
-		msg = string(stmt.WriteToText())
-		raw = string(stmt.WriteToText())
+		msg, raw = stmt.WriteToText()
 	default:
 		return
 	}
@@ -444,7 +454,7 @@ func (stm *stream) resolveClientPacket(payload []byte, seq int, host, snifferTyp
 			ClientPort:  clientPort,
 			VisitUser:   stm.session.UserName,
 			VisitDB:     stm.session.DBName,
-			QuerySQL:    strings.Replace(raw, "\n", "", -1),
+			QuerySQL:    CleanQuerySql(raw),
 			SnifferType: snifferType,
 		}
 
@@ -452,4 +462,19 @@ func (stm *stream) resolveClientPacket(payload []byte, seq int, host, snifferTyp
 		queue.Metrics.Host = host
 		queue.Metrics.Add(&result)
 	}
+}
+
+func CleanQuerySql(raw string) string {
+	return rmu0000(raw)
+}
+
+func rmu0000(s string) string {
+	str := make([]rune, 0, len(s))
+	for _, v := range []rune(s) {
+		if v == 0 || v == 1 || v == 10 {
+			continue
+		}
+		str = append(str, v)
+	}
+	return string(str)
 }
