@@ -26,7 +26,6 @@ const (
 	SnifferType = "-t"
 
 	millSecondUnit = int64(time.Millisecond)
-
 )
 
 type Mysql struct {
@@ -276,17 +275,17 @@ func (stm *stream) resolveServerPacket(payload []byte, seq int, host, snifferTyp
 			BaseQueryPiece: model.BaseQueryPiece{
 				EventTime: time.Now().UnixNano() / millSecondUnit,
 			},
-			ClientHost:     stm.session.ClientIP,
-			ClientPort:     clientPort,
-			VisitUser:      stm.session.UserName,
-			VisitDB:        stm.session.DBName,
-			Message:        msg,
-			SnifferType:    snifferType,
+			ClientHost:  stm.session.ClientIP,
+			ClientPort:  clientPort,
+			VisitUser:   stm.session.UserName,
+			VisitDB:     stm.session.DBName,
+			Message:     strings.Replace(msg, "\n", "", -1),
+			SnifferType: snifferType,
 		}
 
 		fmt.Println(result.ToString())
-		//queue.Metrics.Host = host
-		//queue.Metrics.Add(&result)
+		queue.Metrics.Host = host
+		queue.Metrics.Add(&result)
 	}
 
 }
@@ -346,7 +345,18 @@ func (stm *stream) resolveClientPacket(payload []byte, seq int, host, snifferTyp
 
 		stmtID := binary.LittleEndian.Uint32(payload[1:5])
 		paramId := binary.LittleEndian.Uint16(payload[5:7])
-		stmt, _ := stm.stmtMap[stmtID]
+		stmt, ok := stm.stmtMap[stmtID]
+		if !ok {
+			return
+		}
+
+		if stmt == nil {
+			return
+		}
+
+		if stmt.Args == nil {
+			return
+		}
 
 		if stmt.Args[paramId] == nil {
 			stmt.Args[paramId] = payload[7:]
@@ -428,14 +438,14 @@ func (stm *stream) resolveClientPacket(payload []byte, seq int, host, snifferTyp
 			BaseQueryPiece: model.BaseQueryPiece{
 				ServerIP:   stm.session.ServerIP,
 				ServerPort: servicePort,
-				EventTime: time.Now().UnixNano() / millSecondUnit,
+				EventTime:  time.Now().UnixNano() / millSecondUnit,
 			},
-			ClientHost:   stm.session.ClientIP,
-			ClientPort:   clientPort,
-			VisitUser:    stm.session.UserName,
-			VisitDB:      stm.session.DBName,
-			QuerySQL:     raw,
-			SnifferType:  snifferType,
+			ClientHost:  stm.session.ClientIP,
+			ClientPort:  clientPort,
+			VisitUser:   stm.session.UserName,
+			VisitDB:     stm.session.DBName,
+			QuerySQL:    strings.Replace(raw, "\n", "", -1),
+			SnifferType: snifferType,
 		}
 
 		fmt.Println(result.ToString())
